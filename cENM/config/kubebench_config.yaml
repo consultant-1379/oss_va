@@ -1,0 +1,17 @@
+KubeBench:
+  #Do not modify this
+  #This configuration support ENV variables
+  #The environment variables must have !ENV before them and be in this format to be parsed: ${VAR_NAME}.
+  #E.g.:
+  #scanner:
+  #  arm_path: !ENV 'https://arm.sel..${PROD}:${VER}'
+  #  something_else: !ENV '${AWESOME_ENV_VAR}/var/${A_SECOND_AWESOME_VAR}'
+  Product: 'cENM' #Node/TPG Name (Mandatory parameter) Eg. "cha" or "eric-bss-cha-access"
+  Product_internal: '' #Product name (this is an optional parameter) Eg. "cha-access"
+  Product_contact: 'PDLAZELLES@pdl.internal.ericsson.com' #Email of the SPOC or DL (Mandatory parameter)
+  KubeconfigFile: config #Mount its dir to /opt/kubebench/conf
+  Targets: 'all' #Other Options: master,controlplane,node,etcd,policies # one or more by comma separated.
+  Version: '' #1.19, 1.17 #Only if you want to override the default option.
+  Timeout: 60 #Max Wait time in seconds for the Pod to become successful, 60 secs is default.
+  DisplayReportConsole: False #Make it true if you want the reports to be displayed in console
+  Namespace: 'K8NAMESPACE' #Mandate Option to be filled.Enter the respective namespace to which you have access and which exists.

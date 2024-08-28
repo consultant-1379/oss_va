@@ -1,0 +1,8 @@
+    - name: "SERVICE_NAME"
+      protocol:
+        - "tcp"
+      additionalParams:
+        - "-v"
+        - "-p T:0-65535"
+        - "--stats-every 30"
+

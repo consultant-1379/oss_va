@@ -1,0 +1,10 @@
+    - name: "SERVICE_NAME"
+      protocol:
+        - "tcp"
+        - "udp"
+        - "sctp"
+      additionalParams:
+        - "-v"
+        - "-p T:0-65535,U:0-1024,S:0-65535"
+        - "--stats-every 30"
+

@@ -1,0 +1,23 @@
+Kubehunter:
+  Product: 'cENM' #Node/TPG Name (Mandatory parameter) Eg. "cha" or "eric-bss-cha-access"
+  Product_internal: '' #Product name (this is an optional parameter) Eg. "cha-access"
+  Product_contact: 'PDLAZELLES@pdl.internal.ericsson.com' #Email of the SPOC or DL (Mandatory parameter)
+  RemoteScan: #Scans one or more specific IPs
+    Scan: True
+    NodeIp: IP_ADDRESS #Options: "all: to Scan all nodes, to scan any specific nodes, provide IP's with comma separated Eg: "192.168.0.11,192.168.0.12"
+    KubeconfigFile: config #your cluster config file for authentication
+  InterfaceScan: True #this will scan all of the machine's network interfaces
+  NetworkScanCIDR: #To scan a specific CIDR, Mention CIDR here : Eg: 192.168.0.0/24
+  CommonFields:
+    CheckAsPod: True #Set hunter as an insider pod
+    Statistics: True #Show hunting statistics
+    IncludePatchedVersions: False #Don't skip patched versions when scanning
+    ActiveHunt: False #Active hunting can potentially do state-changing operations on the cluster, which could be harmful. In active hunt,the tool exploits vulnerabilities to explore for further vulnerabilities
+    ReportFormat: "json" #plain, yaml, json
+    DisplayReportConsole: True
+  CustomScan:
+    Scan: False #Enabling this will override all the above parameters/scans.
+                #To directly use the kube-hunter inside
+                #Enable only if you know the commands right.
+    Parameters: "-h" #Eg '--cidr 192.168.0.0/24'
+    DisplayReportConsole: False

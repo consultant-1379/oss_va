@@ -1,0 +1,20 @@
+zapConfig:
+  baseUrl: "BASE_URL"
+  scanType: "full"
+  config_dir: "zap/config"
+  globalConfig:
+  endpoints:
+  - name: "BaseURL"
+    url: "/"
+  report:
+    dir: "zap/reports"
+    format:
+    - html
+    - json
+    - md
+    - xml
+  properties:
+    zap_container_port: 4040
+  additional_zap_options:
+    - "-j -U Administrator"
+  contextFile: enmlogin.context

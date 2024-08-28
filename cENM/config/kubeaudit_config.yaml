@@ -1,0 +1,36 @@
+Kubeaudit:
+  Product: 'cENM' #Node/TPG Name (Mandatory Parameter) Eg. "cha" or "eric-bss-cha-access"
+  Product_internal: '' #Product name (this is an optional parameter) Eg. "cha-access"
+  Product_contact: 'PDLAZELLES@pdl.internal.ericsson.com' #Email of the SPOC or DL (Mandatory Parameter)
+  ClusterMode:
+    Scan: False
+    KubeconfigFile: "config" #default is config  #Mount the dir containing this file to conf
+    Namespace: "" #Optional, If Namespace given, auditing will be done only for the mentioned namespaces. (Comma separated if multiple ns)
+    AuditPickerFile: "" #Optional, #https://github.com/Shopify/kubeaudit#configuration-file, #Mount the dir containing this file to conf
+    Autofix : False #(or True it if needed)
+    AutofixedFile: "fixed_conf" #Mandatory If Autofix enabled, file name inside Mounted reports dir to add corrected config
+    ReportFormat: 'json' #logrus,pretty are other available options. pretty is the default if not given.
+    DisplayReportConsole: False #Make it true if you want the reports to be displayed in console
+  ManifestMode:
+    Scan: True
+    SkipTests: True #Skip scanning manifests from tests folder in your chart. This will internally add --skip-test flag for helm template command.
+    armLinks:
+      Links:
+        - "HELM_CHART_URL"
+      valuesOverride: #Array #If override is needed, add the values yaml names in the same order as arm links, if none, mark it ''
+    offlineArtifacts:
+      name:
+        - ''
+      valuesOverride: ##If override is needed, add the values yaml names in the same order as offlineArtifacts name, if none, mark it ''
+        - '' #mount this to /opt/va-scan-kubeaudit/conf dir
+    AuditPickerFile: "" #Optional #https://github.com/Shopify/kubeaudit#configuration-file, #Mount the dir containing this file to conf
+    Autofix : False #(or True it if needed)
+    AutofixDir: "fixed" #Mandatory If Autofix enabled, folder name inside mounted reports dir to add corrected Yamls
+    ReportFormat: 'json' #logrus,pretty are other available options. Pretty is the default if not given.
+    DisplayReportConsole: False #Make it true if you want the reports to be displayed in console
+  CustomRun:
+    Scan: False #This if True, overrides all the above options.
+    #Give any valid kubeaudit command here
+    #Place and mount the needed config files in /opt/va-scan-kubeaudit/conf/"
+    Parameters: "" #Ex: "all -c /opt/va-scan-kubeaudit/conf/admin.conf"
+    DisplayReportConsole: False #Make it true if you want the reports to be displayed in console

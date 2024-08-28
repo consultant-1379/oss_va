@@ -1,0 +1,22 @@
+*** Settings ***
+Library           Process
+Library           SeleniumLibrary
+Library           OperatingSystem
+
+*** Variables ***
+${LOGIN URL}    BASE_URL
+${BROWSER}    Chrome
+
+*** Keywords ***
+Open Browser To Login Page
+    Open Browser    ${LOGIN URL}    ${BROWSER}
+    Title Should Be    Login Page
+
+Welcome Page Should Be Open
+    Title Should Be    Welcome Page
+
+*** Test Cases ***
+Comparing files
+    ${Pre_Defined_File} =    Get File    ${CURDIR}/va_report_robot.txt
+    ${VA_Report_File} =    Get File    ${CURDIR}/va_report.txt
+    Should Be Equal As Strings    ${Pre_Defined_File}    ${VA_Report_File}

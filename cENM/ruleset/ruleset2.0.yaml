@@ -1,0 +1,409 @@
+modelVersion: 2.0
+
+description: "Vulnerability Analysis (VA) for cENM"
+
+docker-images:
+  - adp-age-scan: ${env.DOCKER_CICD_DROP_REPO}/adp-helm-dr-checker:latest
+  - adp-helm-kubectl: ${env.DOCKER_CICD_DROP_REPO}/bob-py3kubehelmbuilder:latest
+  - adp-release-auto: ${env.DOCKER_CICD_DROP_REPO}/bob-adp-release-auto:latest
+  - adp-release-auto-csv: armdocker.rnd.ericsson.se/proj-axis_test/bob-adp-release-auto:4.53.1-h5cdb502.dirty.root
+  - ciscat-scanner: ${env.DOCKER_CICD_DROP_REPO}/va-image-scan-ciscat-assessor:latest
+  - doc-builder: ${env.DOCKER_CICD_DROP_REPO}/bob-docbuilder:latest
+  - grype-scan: ${env.DOCKER_CICD_DROP_REPO}/va-image-scanning-grype:latest
+  - robot-builder: ${env.DOCKER_CICD_DROP_REPO}/bob-adp-robotbuilder:latest
+  - trivy-inline-scan: ${env.DOCKER_CICD_DROP_REPO}/trivy-inline-scan:latest
+  - va-scan-kubeaudit: ${env.DOCKER_CICD_DROP_REPO}/va-scan-kubeaudit:latest
+  - va-scan-kubebench: ${env.DOCKER_CICD_DROP_REPO}/va-scan-kubebench:latest
+  - va-scan-kubehunter: ${env.DOCKER_CICD_DROP_REPO}/va-scan-kubehunter:latest
+  - va-scan-kubesec: ${env.DOCKER_CICD_DROP_REPO}/va-scan-kubesec:latest
+
+properties:
+  - config-file: marketplace-config.yaml
+  - html-output: html
+  # For adp-fw-templates rules
+  - build-dir: build/marketplace
+
+env:
+  - ARTIFACTORY_USR
+  - ARTIFACTORY_PSW
+  - CISCAT_BENCHMARK
+  - DEFENSICS_HOME
+  - DEFENSICS_PROPERTY
+  - DOCKER_CICD_DROP_REPO (default=armdocker.rnd.ericsson.se/proj-adp-cicd-drop)
+  - GROUP
+  - HOME
+  - K8NAMESPACE
+  - KUBECONFIG (default=$PWD/.kube/config)
+  - PASSWD
+  - PWD
+  - RELEASE (default=false)
+  - XRAY_USR
+  - XRAY_PSW
+
+var:
+  - csar-to-scan
+  - image-to-scan
+  - node-ip
+  - pods
+  - pod-ip
+  - report-format
+  # For adp-fw-templates rules
+  - user-guide-version
+
+rules:
+  #-----------------------------------------
+  # VA OSS Repo Rules
+  #-----------------------------------------
+
+  pre-code-review:
+    - description: For PreCodeReview Job
+    - task: echo-test-1
+      description: echo cmd
+      cmd: echo "Testing Ruleset"
+    - task: ls-test-2
+      description: ls cmd
+      cmd: ls
+
+  #-----------------------------------------
+  # VA Scan Rules
+  #-----------------------------------------
+
+  anchore-grype-scan:
+    - description: The Anchore Grype VA scan
+    - task: scan
+      description: Running the scan on the docker image ${var.image-to-scan}
+      docker-image: grype-scan
+      docker-in-docker: socket
+      docker-flags:
+        - "--volume ${env.HOME}/.docker:${env.HOME}/.docker"
+        - "--volume ${env.GROUP}:/etc/group:ro"
+        - "--volume ${env.PASSWD}:/etc/passwd:ro"
+      cmd: grype_scan
+        --image ${var.image-to-scan}
+        --report-dir anchore-grype-reports
+
+  cis-cat-scan:
+    - description: The CIS-CAT Pro Assessor VA scan
+    - task: install-packages
+      description: Installing the CIS-CAT packages required for the scan
+      cmd: docker build . -t ${var.image-to-scan}_cis-cat -f config/Dockerfile_add_packages
+    - task: scan
+      description: Running the scan on the docker image ${var.image-to-scan}_cis-cat
+      docker-image: ciscat-scanner
+      docker-in-docker: socket
+      docker-mounts:
+        - /etc/timezone:/etc/timezone:ro
+        - /etc/localtime:/etc/localtime:ro
+      docker-flags:
+        - "--volume ${env.PWD}:${env.PWD}"
+        - "--volume /var/run/docker.sock:/var/run/docker.sock"
+        - "--workdir ${env.PWD}"
+      cmd: cis-cat-assessor-scan
+        --target-image ${var.image-to-scan}_cis-cat
+        --benchmark ${env.CISCAT_BENCHMARK}
+        --report-dir report_dir
+        --report-name-prefix cis-cat-report
+        --applicability-spec ${env.PWD}/config/applicability_spec.json
+
+  cbos-age-tool-scan:
+    - description: The CBOS Age Tool scan for a cENM CSAR
+    - task: scan
+      description: Running the scan on the CSAR ${var.csar-to-scan}
+      docker-image: adp-age-scan
+      docker-flags:
+        - "--volume ${env.PWD}:${env.PWD}"
+        - "--workdir ${env.PWD}"
+      cmd: cbos-age-tool
+        -a=${var.csar-to-scan}
+        -C
+        -o=${env.PWD}/reports/
+        -Dhelmdrck.credential.file.path=${env.PWD}/credentials.yaml
+
+  defensics-scan:
+    - description: The Defensics VA scan
+    - task: scan
+      description: Running the scan on ${env.K8NAMESPACE}
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--env DEFENSICS_HOME=${env.DEFENSICS_HOME}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.DEFENSICS_HOME}:${env.DEFENSICS_HOME}"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd:
+        - helm delete defensics-${env.K8NAMESPACE} -n ${env.K8NAMESPACE} | tee helm.log
+        - helm list --all -n ${env.K8NAMESPACE}
+        - test.py --helm-v3 --kubernetes-admin-conf=${env.KUBECONFIG}
+          --helm-user=${env.ARTIFACTORY_USR}
+          --arm-api-token=${env.ARTIFACTORY_PSW}
+          --kubernetes-namespace=${env.K8NAMESPACE}
+          --defensics-test
+          --defensics-test-suite="http-server"
+          --defensics-test-plan-dir="${env.DEFENSICS_HOME}/synopsys/defensics/testplans"
+          --defensics-test-report-dir="${env.DEFENSICS_HOME}/synopsys/defensics/results"
+          --defensics-suite-properties="${env.DEFENSICS_PROPERTY}"
+
+  kubeaudit-scan:
+    - description: The Kubeaudit VA scan
+    - task: scan
+      description: Running scan on the docker images's helm chart set in config/kubeaudit_config.yaml
+      docker-image: va-scan-kubeaudit
+      docker-flags:
+        - "--workdir /opt/va-scan-kubeaudit/"
+        - "-v ${env.PWD}/config:/opt/va-scan-kubeaudit/conf"
+        - "-v ${env.PWD}/reports/:/tmp/reports"
+        #- "-v ${env.PWD}/charts/${common.helm-chart-name}:/tmp/src"
+      cmd: " "
+
+  kubebench-scan:
+    - description: The Kubebench VA scan
+    - task: scan
+      description: Running the scan on ${env.K8NAMESPACE} set in config/kubebench_config.yaml
+      docker-image: va-scan-kubebench
+      docker-flags:
+        - "--workdir /opt/kubebench/"
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--env K8NAMESPACE=${env.K8NAMESPACE}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "-v ${env.PWD}/config:/opt/kubebench/conf" #Place kube-cluster admin config, kubebench config file,
+        - "-v ${env.PWD}/reports/:/tmp/reports"
+      cmd: " "
+
+  kubehunter-scan:
+    - description: The Kubehunter VA scan
+    - task: get-node-ip
+      description: Getting Node IP Address to scan
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--env K8NAMESPACE=${env.K8NAMESPACE}"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: kubectl get nodes -o wide -n ${env.K8NAMESPACE} | grep Ready | awk '{print $6}' | paste -s -d, - > .bob/var.node-ip
+    - task: scan
+      description: Running scan on the Node IP addresses set in config/kubehunter_config.yaml
+      docker-image: va-scan-kubehunter
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--env K8NAMESPACE=${env.K8NAMESPACE}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--workdir /opt/kubehunter/"
+        - "-v ${env.PWD}/config:/opt/kubehunter/conf" #Place kubehunter config and kube-cluster admin config here
+        - "-v ${env.PWD}/reports/:/tmp/reports"
+      cmd: " "
+
+  kubesec-scan:
+    - description: The Kubesec VA scan
+    - task: scan
+      description: Running scan on the docker images's helm chart set in config/kubesec_config.yaml
+      docker-image: va-scan-kubesec
+      docker-flags:
+        - "--workdir /opt/va-scan-kubesec/"
+        - "-v ${env.PWD}/config:/opt/va-scan-kubesec/conf" #Place kubesec config and kube-cluster admin config here
+        - "-v ${env.PWD}/reports/:/tmp/reports"
+        #- "-v ${env.PWD}/src/:/tmp/src" #optional, can be used to direct scan helm yamls.
+      cmd: " "
+
+  nmap-scan:
+    - description: The NMAP VA scan
+    - task: clean
+      description: The clean for the scan
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--env K8NAMESPACE=${env.K8NAMESPACE}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: helm uninstall nmap-${env.K8NAMESPACE} -n ${env.K8NAMESPACE} --wait|true
+    - task: get-pods
+      description: Getting Pods to scan
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--env K8NAMESPACE=${env.K8NAMESPACE}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: kubectl get pods -o name -n ${env.K8NAMESPACE} --field-selector=status.phase=Running | grep -v elect-one-minute-cronjob |sed -e 's#pod/##g' > .bob/var.pods
+    - task: scan
+      description: Running scan on the Pods set for ${var.pods}
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: /test.py --kubernetes-admin-conf=${env.KUBECONFIG}
+        --helm-user=${env.ARTIFACTORY_USR}
+        --arm-api-token=${env.ARTIFACTORY_PSW}
+        --kubernetes-namespace=${env.K8NAMESPACE}
+        --nmap-config-file=nmap_config.yaml
+        --nmap-test
+
+  robot-framework-scan:
+    - description: The Robot Framework VA scan
+    - task: scan
+      description: Running scan on BASE_URL set in test-suite.txt
+      docker-image: robot-builder
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: /bin/bash -c "robot --outputdir ${env.PWD}/.bob ${env.PWD}/test-suite.txt"
+
+  tenable-scan:
+    - description: The Tenable VA scan
+    - task: get-pod-ip
+      description: Getting Pod IP Addresses to scan
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: kubectl get pods -n ${env.K8NAMESPACE} --output=custom-columns="IP:.status.podIP,STATUS:.status.phase" | grep Running | awk '{print $1}' | paste -s -d, - > .bob/var.pod-ip
+    - task: scan
+      description: Running scan on the Pod IP address set for ${var.pod-ip}
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: python nessus.py -c nessus-sc.conf -t "${var.pod-ip}" -n 'Tenable' -v '1.0.0' -p 'DE_Scan' -o 'nessus_reports' --productname 'cENM' --productnumber 'NA' -sd tenablesc-secrets.yaml -tsc -su -keep
+
+  trivy-scan:
+    - description: The Trivy VA scan
+    - task: scan
+      description: Running the scan on docker image ${var.image-to-scan}
+      docker-image: trivy-inline-scan
+      docker-in-docker: socket
+      docker-flags:
+        - "--volume ${env.HOME}/.docker:${env.HOME}/.docker"
+        - "--volume ${env.GROUP}:/etc/group:ro"
+        - "--volume ${env.PASSWD}:/etc/passwd:ro"
+      cmd: --timeout 120m --format ${var.report-format} --output trivy_scan.json ${var.image-to-scan}
+
+  zap-scan:
+    - description: The ZAP VA scan
+    - task: clean
+      description: The clean for the scan
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=${env.KUBECONFIG}"
+        - "--env K8NAMESPACE=${env.K8NAMESPACE}"
+        - "--volume ${env.KUBECONFIG}:${env.KUBECONFIG}:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: helm uninstall application-under-test-zap -n ${env.K8NAMESPACE} --wait|true
+    - task: scan
+      description: Running scan on BASE_URL set in zap_config.yaml
+      docker-image: adp-helm-kubectl
+      docker-flags:
+        - "--env KUBECONFIG=/tmp/admin.conf"
+        - "--volume ${env.KUBECONFIG}:/tmp/admin.conf:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: /test.py
+        -n ${env.K8NAMESPACE}
+        -k /tmp/admin.conf
+        -u ${env.ARTIFACTORY_USR}
+        -t ${env.ARTIFACTORY_PSW}
+        --only-zap-test
+        --skip-upgrade-test
+        --zap-config=zap_config.yaml
+
+  #-----------------------------------------
+  # VA Report Rules
+  #-----------------------------------------
+
+  xray-report-generation:
+    - description: The XRAY VA Scan
+    - task: fetch
+      description: Fetching the XRAY Report
+      docker-image: adp-release-auto
+      cmd: fetch-xray
+        --user ${env.XRAY_USR}
+        --apikey ${env.XRAY_PSW}
+        --config xray.config
+        --output xray_report.json
+        --ignore-unindexed
+
+  va-report-generation:
+  - description: The generation of the full VA report for cENM
+  - task: generate
+    description: Generating the VA report
+    docker-image: adp-release-auto
+    cmd: bash -c 'va-report
+      --md
+      --output ./Vulnerability_Report_2.0.md
+      --config ./va_report_config.yaml
+      --anchore-reports anchore-reports
+      --trivy-reports trivy-reports
+      --kubeaudit-reports kubeaudit-reports
+      --kubesec-reports kubesec-reports
+      --zap-reports zap-reports
+      --nmap-reports nmap-reports
+      --defensics-report defensics-reports
+      --xray xray_report.json
+      --ts tenable-reports/tenable-report.csv
+      --ciscat-reports ciscat-reports'
+
+  va-report-csv-generation:
+    - description: The generation of the VA report for cENM - .CSV format for Anchore, Trivy, X-Ray
+    - task: generate
+      description: Generating the VA report
+      docker-image: adp-release-auto-csv
+      cmd: bash -c 'va-report
+        --csv
+        --output ./Vulnerability_Report_2.0.csv
+        --config ./va_report_config.yaml
+        --anchore-reports anchore-reports
+        --trivy-reports trivy-reports
+        --xray xray_report.json'
+
+  va-report-static-generation:
+    - description: The generation of the static VA report for cENM
+    - task: generate
+      description: Generating the VA report
+      docker-image: adp-release-auto
+      cmd: bash -c 'va-report
+        --md
+        --output ./Vulnerability_Report_2.0.md
+        --config ./va_report_config.yaml
+        --anchore-reports anchore-grype-reports
+        --trivy-reports trivy-report
+
+  ######################### Rules Below Came From: adp-fw-templates #######################
+
+  clean:
+    - task: clean
+      cmd: rm -rf ${env.PWD}/${build-dir} .bob ${env.PWD}/user-guide-template/.bob
+
+  # Initialize, generate version and read commit hash
+  init:
+    - task: bob-dir
+      cmd: mkdir -p .bob
+    - task: user-guide-version
+      docker-image: adp-release-auto
+      cmd: ${env.PWD}/utils/generate-doc-version
+        --is-release ${env.RELEASE}
+        --source ${env.PWD}/user-guide-template
+        --output user-guide-version
+        -f ${env.PWD}/user-guide-template/VERSION_PREFIX
+    - task: date
+      docker-image: adp-release-auto
+      cmd: generate-date --output date
+    - task: propagate-bob-vars
+      cmd: cp -r .bob ${env.PWD}/user-guide-template/.bob
+    - task: tmpdir
+      cmd: mkdir -p ${env.PWD}/${build-dir}
+
+  # Generate the HTML version of the VA Report
+  generate-docs:
+    - task: generate-user-guide-html
+      docker-image: adp-release-auto
+      cmd: doc-handler generate
+        --config ${config-file}
+        --output ${env.PWD}/${build-dir}/${html-output}
+        --format html
+
+  # Run link to check MD files
+  lint:
+    - task: markdownlint
+      docker-image: doc-builder
+      cmd: markdownlint --config ./markdownlint.yaml $(git ls-files -- \*\.md | grep -v vendor | cat | xargs)

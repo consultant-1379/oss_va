@@ -1,0 +1,13 @@
+FROM <SERV_IMAGE>
+
+ARG CBO_VERSION=<CBO_VERSION>
+ARG CBO_REPO=arm.sero.gic.ericsson.se/artifactory/proj-ldc-repo-rpm-local/common_base_os/sles/
+
+USER root
+
+RUN zypper removerepo COMMON_BASE_OS_SLES_REPO \
+    && zypper addrepo --gpgcheck-strict -f https://${CBO_REPO}${CBO_VERSION}/?ssl_verify=no \
+    COMMON_BASE_OS_SLES_REPO \
+    && zypper --gpg-auto-import-keys refresh \
+    && zypper install -l -y iproute2 util-linux which rpm hostname gawk \
+    && zypper clean --all

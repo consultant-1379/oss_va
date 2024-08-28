@@ -1,0 +1,15 @@
+Kubesec:
+  Product: 'cENM' #Node/TPG Name (Mandatory parameter) Eg. "cha" or "eric-bss-cha-access"
+  Product_internal: '' #Product name (this is an optional parameter) Eg. "cha-access"
+  Product_contact: 'PDLAZELLES@pdl.internal.ericsson.com' #Email of the SPOC or DL (Mandatory parameter)
+  KubesecYAML:
+    Scan: True
+    SkipTests: True #Skip scanning yamls from tests folder in your chart.
+    armLinks: #Add the ARM links which doesn't require authentication here
+      Links:
+        - "HELM_CHART_URL"
+      valuesOverride: ##If override is needed, add the values yaml names in the same order as arm links
+  KubesecCluster:
+    Scan: False
+    KubeconfigFile: "admin.conf"
+    namespace: "myapp-ns"

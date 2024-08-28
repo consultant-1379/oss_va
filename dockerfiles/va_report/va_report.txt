@@ -1,0 +1,5 @@
+**vulnerability report. Please make sure, that all manual actions are**
+**completed before PRA, then remove these lines**
+
+Issues found are evaluated and mitigated accordingly.
+The notifiable issues and flaws left in the product in release time are listed in this report.
